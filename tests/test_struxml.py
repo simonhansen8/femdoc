@@ -28,3 +28,10 @@ def test_rapport_fra_struxml(tmp_path):
     overskrifter = [x.text for x in d.paragraphs if x.style.name.startswith("Heading")]
     assert "Modelbeskrivelse" in overskrifter and "Laster" in overskrifter
     assert len(d.inline_shapes) >= 4
+
+
+def test_kontorbygning():
+    m = laes(EKS / "kontorbygning.struxml")
+    assert len(m.stænger) == 24 + 34 and len(m.flader) == 2
+    assert len(m.understoetninger) == 12 and len(m.lastkombinationer) == 6
+    assert {s.tvaersnit for s in m.stænger} == {"HE-B 200", "IPE 300"}

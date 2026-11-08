@@ -60,5 +60,11 @@ Engangsopsætning: lav en `.dsc` dokumentationsskabelon med de faste resultatvie
 pip install pytest && python -m pytest
 ```
 
-Eksempelmodellerne i `eksempel/struxml/` stammer fra StruSofts
+## Testmodel
+`eksempel/struxml/kontorbygning.struxml` er en lille kontorbygning i 2 etager: stålskelet
+(HE-B 200 søjler, IPE 300 bjælker, S 355) med 220 mm betondæk (C30/37) på et modulnet på 3 × 6,0 m og 2 × 5,0 m.
+Den har charnierlejer, 5 lasttilfælde (egenlast, installationer, nyttelast, sne og vind) og 6 lastkombinationer.
+Filen er valideret mod `strusoft.xsd` og genereres med `eksempel/generer_testmodel.py`.
+
+De øvrige eksempelmodeller i `eksempel/struxml/` stammer fra StruSofts
 [femdesign-api](https://github.com/strusoft/femdesign-api) (MIT/Apache-2.0).
