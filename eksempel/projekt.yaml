@@ -1,0 +1,31 @@
+# Det eneste ingeniøren udfylder pr. projekt
+projekt:
+  navn: "Etageboligbyggeri, Blok B"
+  nummer: "24-117"
+  beskrivelse: "Stabilitet og bæreevne af etagedæk og vægge, 5 etager."
+  projekterende: "SIH"
+  kontrol: "ABC"
+
+fem_design:
+  program: 'C:\Program Files\StruSoft\FEM-Design 24\fd3dstruct.exe'
+  model: "model/blok_b.str"
+  koer_analyse: false               # true = beregn før eksport
+  dokumentationsskabelon: "skabeloner/standard_views.dsc"  # alle views/plots, laves én gang
+
+rapport:
+  output: "output"
+  word_skabelon: null               # fx "skabeloner/firma.dotx"
+  sektioner:
+    - titel: "Udnyttelse af stålbjælker"
+      bsc: "skabeloner/steel_utilization.bsc"
+      kolonne: "Max."
+      graense: 1.0
+      tekst: "Eftervisning iht. EN 1993-1-1, kombination ULS."
+    - titel: "Udbøjning af etagedæk (SLS)"
+      bsc: "skabeloner/shell_displacement.bsc"
+      kolonne: "ez' [mm]"
+      graense: 30
+      tekst: "Grænse L/250 = 30 mm for spændvidde 7,5 m."
+    - titel: "Reaktioner i punktunderstøtninger"
+      bsc: "skabeloner/point_support_reactions.bsc"
+      kolonne: "Fz' [kN]"

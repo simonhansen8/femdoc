@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+*_rapport/
+eksempel/output/*.docx
+eksempel/output/figurer/
+eksempel/output/fd_log/

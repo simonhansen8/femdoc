@@ -1,0 +1,7 @@
+matplotlib>=3.7
+# Kun til fuld kørsel med FEM-Design (Windows):
+# FEM-Design>=0.0.9
+python-docx>=1.1
+docxcompose>=1.4
+pandas>=2.0
+PyYAML>=6.0
