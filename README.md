@@ -7,6 +7,13 @@ Genererer en statisk dokumentation (Word) ud fra en FEM-Design model med få inp
 Python-koden kører direkte i browseren (Pyodide), så modellen forlader ikke din computer.
 Siden udrulles automatisk fra `main` af `.github/workflows/pages.yml`.
 
+### Selvvalgte visninger
+Når modellen er indlæst, vises en plan af den. Klik **Tegn snit** og derefter start- og slutpunkt.
+Punkterne fanger knuder og modullinjer, og næsten vandrette eller lodrette linjer rettes ind.
+Snittet tegnes som opstalt med elementer inden for ± dybde/2. Elementer der krydser snittet vises som snitflader.
+Man vælger også, hvilke etageplaner (én pr. kote med bjælker eller dæk) og 3D-visninger der skal med.
+De samme visninger kan angives under `rapport.views` i `projekt.yaml` (se `eksempel/projekt.yaml`).
+
 ## Hurtigt i gang – kun en .struxml
 Kræver **ikke** FEM-Design installeret.
 

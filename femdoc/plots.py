@@ -67,24 +67,48 @@ def isometri(m: Model, ud: Path, elev=25, azim=-60, titel="Modeloversigt (isomet
     return ud
 
 
-def plan(m: Model, ud: Path) -> Path:
+def plan(m: Model, ud: Path, snit: list[dict] | None = None) -> Path:
     fig, ax = plt.subplots(figsize=(7.5, 5.5), dpi=160)
+    for v in snit or []:
+        (x0, y0), (x1, y1) = v["fra"], v["til"]
+        ax.plot([x0, x1], [y0, y1], color=LASTFARVE, lw=1.2, ls=(0, (8, 3, 2, 3)), zorder=5)
+        dx, dy = x1 - x0, y1 - y0
+        L = (dx * dx + dy * dy) ** 0.5 or 1
+        nx, ny = -dy / L, dx / L  # synsretning: venstre for snitretningen
+        bogstav = v.get("navn", "").split("-")[0]
+        for (x, y), fortegn in (((x0, y0), -1), ((x1, y1), 1)):
+            ax.annotate("", xy=(x + nx * 0.8, y + ny * 0.8), xytext=(x, y),
+                        arrowprops=dict(arrowstyle="-|>", color=LASTFARVE, lw=1.2), zorder=6)
+            ax.text(x + fortegn * dx / L * 0.5, y + fortegn * dy / L * 0.5, bogstav, color=LASTFARVE,
+                    fontsize=9, weight="bold", ha="center", va="center", zorder=6)
+    fladetekst, soejler = {}, {}
     for f in m.flader:
         if len(f.kontur) >= 3 and f.type != "wall":
             xs, ys, _ = zip(*f.kontur)
             ax.fill(xs, ys, color=FARVER.get(f.type, "#ccc"), alpha=0.35, ec="#555", lw=0.6)
-            ax.text(sum(xs) / len(xs), sum(ys) / len(ys), f.navn, fontsize=6, ha="center")
+            c = (round(sum(xs) / len(xs), 2), round(sum(ys) / len(ys), 2))
+            fladetekst.setdefault(c, []).append(f.navn)
         elif len(f.kontur) >= 2:  # væg ses som linje i plan
             xs, ys, _ = zip(*f.kontur)
             ax.plot(xs, ys, color=FARVER["wall"], lw=3)
+    for (x, y), navne in fladetekst.items():
+        ax.text(x, y, ", ".join(navne), fontsize=6, ha="center", va="center", color="#444")
+    bjaelker = set()
     for s in m.stænger:
         if len(s.punkter) >= 2:
             xs, ys, _ = zip(*s.punkter)
             if s.type == "column" or (abs(xs[0] - xs[-1]) < 1e-6 and abs(ys[0] - ys[-1]) < 1e-6):
                 ax.plot(xs[0], ys[0], "s", color=FARVER["column"], ms=5)
+                soejler.setdefault((round(xs[0], 2), round(ys[0], 2)), []).append(s.navn)
             else:
                 ax.plot(xs, ys, color=FARVER.get(s.type, "#333"), lw=1.8)
-            ax.text(xs[0], ys[0], " " + s.navn, fontsize=5.5)
+                mid = (round((xs[0] + xs[-1]) / 2, 2), round((ys[0] + ys[-1]) / 2, 2))
+                if mid not in bjaelker:  # kun øverste/første label pr. position
+                    bjaelker.add(mid)
+                    ax.text(mid[0], mid[1], s.navn, fontsize=5.5, ha="center", va="bottom",
+                            rotation=90 if abs(xs[0] - xs[-1]) < 1e-6 else 0)
+    for (x, y), navne in soejler.items():
+        ax.text(x, y, " " + navne[0], fontsize=5.5, va="top", ha="left")
     for u in m.understoetninger:
         if u.type == "punkt" and u.geometri:
             ax.plot(u.geometri[0][0], u.geometri[0][1], "^", color="#2e7d32", ms=6)

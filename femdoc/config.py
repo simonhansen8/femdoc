@@ -29,6 +29,7 @@ class Projekt:
     koer_analyse: bool
     sektioner: list[TabelSektion] = field(default_factory=list)
     basis: Path = Path(".")
+    views: list[dict] | None = None      # None = standardvisninger
 
 
 def _sti(basis: Path, v):
@@ -56,14 +57,16 @@ def indlaes(sti: str | Path) -> Projekt:
         sektioner=[TabelSektion(**{**s, "bsc": str(_sti(basis, s["bsc"]))})
                    for s in rap.get("sektioner", [])],
         basis=basis,
+        views=rap.get("views"),
     )
 
 
 def fra_struxml(sti: str | Path, output: str | Path | None = None, navn: str | None = None,
-                nummer: str = "") -> Projekt:
+                nummer: str = "", views: list[dict] | None = None) -> Projekt:
     """Minimal opsætning når man kun har en .struxml (ingen projekt.yaml)."""
     sti = Path(sti).resolve()
     return Projekt(
         navn=navn or sti.stem, nummer=nummer, beskrivelse="", projekterende="", kontrol="",
         model=sti, fd_sti="", output=Path(output).resolve() if output else sti.parent / f"{sti.stem}_rapport",
-        dokumentationsskabelon=None, word_skabelon=None, koer_analyse=False, basis=sti.parent)
+        dokumentationsskabelon=None, word_skabelon=None, koer_analyse=False, basis=sti.parent,
+        views=views)
