@@ -109,7 +109,7 @@ def byg(p: Projekt) -> Path:
     if p.model and p.model.suffix.lower() == ".struxml" and p.model.exists():
         from .struxml import laes
         from .modelrapport import tilfoej
-        tilfoej(doc, laes(p.model), p.output / "figurer")
+        tilfoej(doc, laes(p.model), p.output / "figurer", p.views)
 
     if p.sektioner:
         doc.add_heading("Resultater", level=1)

@@ -8,12 +8,20 @@ projekt:
 
 fem_design:
   program: 'C:\Program Files\StruSoft\FEM-Design 24\fd3dstruct.exe'
-  model: "model/blok_b.str"
+  model: "struxml/kontorbygning.struxml"   # .str eller .struxml (struxml giver også modelafsnit og views)
   koer_analyse: false               # true = beregn før eksport
   dokumentationsskabelon: "skabeloner/standard_views.dsc"  # alle views/plots, laves én gang
 
 rapport:
   output: "output"
+  # Selvvalgte visninger (udelades = standard: isometri x2 + plan).
+  # Snit: lodret plan gennem linjen fra -> til (x, y i meter), set i pilenes retning.
+  views:
+    - {type: 3d, navn: "Isometri", azim: -60, elev: 25}
+    - {type: oversigt, navn: "Plan med snit"}
+    - {type: plan, z: 3.5}
+    - {type: snit, navn: "A-A", fra: [-1, 5], til: [19, 5], dybde: 1.0}
+    - {type: snit, navn: "B-B", fra: [9, -1], til: [9, 11], dybde: 1.0}
   word_skabelon: null               # fx "skabeloner/firma.dotx"
   sektioner:
     - titel: "Udnyttelse af stålbjælker"

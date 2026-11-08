@@ -20,13 +20,27 @@ if "/app" not in sys.path:
     sys.path.insert(0, "/app")
 import matplotlib
 matplotlib.use("Agg")
-from femdoc.web import generer
+from femdoc.web import generer, plan
 `);
 }
 
-export async function genererRapport(pyodide, struxmlBytes, felter) {
+function skrivModel(pyodide, struxmlBytes) {
   pyodide.FS.mkdirTree("/data");
   pyodide.FS.writeFile("/data/model.struxml", struxmlBytes);
+}
+
+// Geometri til den interaktive plan (bjælker, søjler, dæk, niveauer, knuder)
+export function hentPlan(pyodide, struxmlBytes) {
+  skrivModel(pyodide, struxmlBytes);
+  const f = pyodide.globals.get("plan");
+  try { return JSON.parse(f("/data/model.struxml")); } finally { f.destroy(); }
+}
+
+// felter.views: liste af view-definitioner (se femdoc/views.py) eller undefined = standard
+export async function genererRapport(pyodide, struxmlBytes, felter) {
+  skrivModel(pyodide, struxmlBytes);
+  const { views, ...rest } = felter;
+  felter = { ...rest, ...(views ? { views: JSON.stringify(views) } : {}) };
   const ud = "/tmp/femdoc_" + Date.now();
   const generer = pyodide.globals.get("generer");
   const res = generer.callKwargs({ struxml: "/data/model.struxml", output: ud, ...felter });

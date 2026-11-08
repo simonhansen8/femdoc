@@ -34,8 +34,10 @@ def _figur(doc, sti: Path, tekst: str, nr: list):
     cap.runs[0].italic = True; cap.runs[0].font.size = Pt(9)
 
 
-def tilfoej(doc, m: Model, billedmappe: Path):
+def tilfoej(doc, m: Model, billedmappe: Path, views: list[dict] | None = None):
     billedmappe.mkdir(parents=True, exist_ok=True)
+    for gammel in billedmappe.glob("*.png"):  # fjern figurer fra tidligere kørsler
+        gammel.unlink()
     nr = [0]
 
     doc.add_heading("Modelbeskrivelse", level=1)
@@ -50,11 +52,13 @@ def tilfoej(doc, m: Model, billedmappe: Path):
         f"Modelfil: {m.fil.name}.")
 
     if m.stænger or m.flader:
-        _figur(doc, plots.isometri(m, billedmappe / "isometri.png"), "Modeloversigt, isometri", nr)
-        _figur(doc, plots.isometri(m, billedmappe / "isometri_bag.png", azim=120,
-                                   titel="Modeloversigt (set fra modsat side)"),
-               "Modeloversigt set fra modsat side", nr)
-        _figur(doc, plots.plan(m, billedmappe / "plan.png"), "Plan set ovenfra", nr)
+        from .views import STANDARD, tegn
+        valgte = STANDARD if views is None else views
+        figurer = tegn(m, valgte, billedmappe)
+        if views is not None and figurer:
+            doc.add_heading("Visninger", level=2)
+        for sti, tekst in figurer:
+            _figur(doc, sti, tekst, nr)
 
     if m.materiale_data:
         doc.add_heading("Materialer", level=2)
