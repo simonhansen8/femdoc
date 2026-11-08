@@ -5,3 +5,6 @@ __pycache__/
 eksempel/output/*.docx
 eksempel/output/figurer/
 eksempel/output/fd_log/
+_site/
+web/node_modules/
+web/package-lock.json
