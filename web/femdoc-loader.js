@@ -1,6 +1,4 @@
 // Fælles indlæsning af femdoc i Pyodide (bruges af websiden og af CI-testen).
-export const MODULER = ["__init__", "config", "fem", "modelrapport", "plots",
-  "rapport", "struxml", "tabeller", "web"];
 export const PAKKER = ["matplotlib", "lxml", "pyyaml", "micropip", "typing-extensions"];
 
 export async function installerFemdoc(pyodide, hentTekst, status = () => {}) {
@@ -11,8 +9,10 @@ export async function installerFemdoc(pyodide, hentTekst, status = () => {}) {
   await micropip.install("python-docx");
   status("Indlæser femdoc …");
   pyodide.FS.mkdirTree("/app/femdoc");
-  for (const m of MODULER) {
-    pyodide.FS.writeFile(`/app/femdoc/${m}.py`, await hentTekst(`femdoc/${m}.py`));
+  // moduler.json skrives af byg_side.sh, så nye moduler kommer automatisk med
+  const moduler = JSON.parse(await hentTekst("femdoc/moduler.json"));
+  for (const m of moduler) {
+    pyodide.FS.writeFile(`/app/femdoc/${m}`, await hentTekst(`femdoc/${m}`));
   }
   await pyodide.runPythonAsync(`
 import sys
