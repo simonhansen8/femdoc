@@ -104,8 +104,8 @@ $("drop").ondrop = (e) => { e.preventDefault(); $("drop").classList.remove("over
   if (e.dataTransfer.files[0]) laesFil(e.dataTransfer.files[0]); };
 
 $("eksempel").onclick = async () => {
-  const r = await fetch("eksempler/sample_slab.struxml");
-  vaelg("sample_slab.struxml", new Uint8Array(await r.arrayBuffer()));
+  const r = await fetch("eksempler/kontorbygning.struxml");
+  vaelg("kontorbygning.struxml", new Uint8Array(await r.arrayBuffer()));
 };
 
 $("koer").onclick = async () => {
