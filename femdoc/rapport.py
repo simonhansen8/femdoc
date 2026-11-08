@@ -8,7 +8,6 @@ from docx.shared import Pt, RGBColor, Cm
 
 from .config import Projekt
 from .fem import csv_sti, fd_docx_sti
-from .tabeller import laes_liste
 
 MAX_RAEKKER = 25  # resten ligger i bilag/CSV
 
@@ -60,6 +59,7 @@ def _sektion(doc: Document, p: Projekt, s, oversigt: list):
     if not f.exists():
         doc.add_paragraph(f"MANGLER: {f.name} blev ikke genereret.").runs[0].font.color.rgb = RGBColor(0xC0, 0, 0)
         oversigt.append((s.titel, "–", "MANGLER")); return
+    from .tabeller import laes_liste  # pandas indlæses kun når der er resultattabeller
     titel, df = laes_liste(f)
     if titel:
         doc.add_paragraph(titel).runs[0].italic = True

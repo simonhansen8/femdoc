@@ -2,6 +2,11 @@
 
 Genererer en statisk dokumentation (Word) ud fra en FEM-Design model med få inputs.
 
+## Webside
+**https://simonhansen8.github.io/femdoc/** – upload en .struxml og hent rapporten.
+Python-koden kører direkte i browseren (Pyodide), så modellen forlader ikke din computer.
+Siden udrulles automatisk fra `main` af `.github/workflows/pages.yml`.
+
 ## Hurtigt i gang – kun en .struxml
 Kræver **ikke** FEM-Design installeret.
 
@@ -48,6 +53,7 @@ Engangsopsætning: lav en `.dsc` dokumentationsskabelon med de faste resultatvie
 | `femdoc/fem.py` | Styring af FEM-Design via API'et |
 | `femdoc/tabeller.py` | Læser FEM-Designs CSV-lister |
 | `femdoc/rapport.py` | Samler Word-rapporten |
+| `femdoc/web.py`, `web/` | Websiden (Pyodide) |
 
 ## Test
 ```bash

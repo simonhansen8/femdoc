@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>femdoc – rapport fra FEM-Design</title>
+<style>
+  :root { --bg:#f6f7f9; --kort:#fff; --tekst:#1c2430; --svag:#5b6575; --kant:#dde2e8;
+          --accent:#1f4e79; --accent-tekst:#fff; --fejl:#b42318; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14181e; --kort:#1d232b; --tekst:#e6e9ee; --svag:#9aa4b2; --kant:#2e3742;
+            --accent:#6aa5d8; --accent-tekst:#0d1620; --fejl:#f97066; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+         background:var(--bg); color:var(--tekst); }
+  main { max-width:880px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:26px; margin:0 0 4px; }
+  .under { color:var(--svag); margin:0 0 24px; }
+  .kort { background:var(--kort); border:1px solid var(--kant); border-radius:10px; padding:20px; margin-bottom:16px; }
+  .drop { border:2px dashed var(--kant); border-radius:10px; padding:28px; text-align:center; cursor:pointer; }
+  .drop.over { border-color:var(--accent); }
+  .drop strong { color:var(--accent); }
+  .felter { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-top:16px; }
+  label { display:flex; flex-direction:column; font-size:13px; color:var(--svag); gap:4px; }
+  input, textarea { font:inherit; padding:8px 10px; border:1px solid var(--kant); border-radius:6px;
+                    background:var(--bg); color:var(--tekst); }
+  textarea { grid-column:1/-1; min-height:60px; }
+  .knapper { display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }
+  button, a.knap { font:inherit; padding:10px 18px; border-radius:6px; border:1px solid var(--accent);
+                   background:var(--accent); color:var(--accent-tekst); cursor:pointer; text-decoration:none; }
+  button.sekundaer { background:transparent; color:var(--accent); }
+  button:disabled { opacity:.5; cursor:default; }
+  #status { color:var(--svag); margin-top:12px; min-height:1.5em; }
+  #status.fejl { color:var(--fejl); white-space:pre-wrap; font-family:ui-monospace, monospace; font-size:12px; }
+  .figurer { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; margin-top:16px; }
+  .figurer img { width:100%; border:1px solid var(--kant); border-radius:6px; background:#fff; }
+  .figurer figcaption { font-size:12px; color:var(--svag); }
+  .noter { font-size:13px; color:var(--svag); }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>femdoc</h1>
+  <p class="under">Upload en FEM-Design <code>.struxml</code> og få en Word-rapport med modelvisninger,
+    materialer, tværsnit, understøtninger og laster. Filen behandles i din browser og sendes ikke nogen steder hen.</p>
+
+  <section class="kort">
+    <div class="drop" id="drop" tabindex="0" role="button">
+      <div id="filtekst"><strong>Vælg .struxml</strong> eller træk filen herind</div>
+    </div>
+    <input type="file" id="fil" accept=".struxml,.xml" hidden>
+    <div class="felter">
+      <label>Projektnavn<input id="navn" placeholder="fx Etageboliger, Blok B"></label>
+      <label>Projektnummer<input id="nummer" placeholder="fx 24-117"></label>
+      <label>Projekterende<input id="projekterende"></label>
+      <label>Kontrol<input id="kontrol"></label>
+      <label style="grid-column:1/-1">Beskrivelse<textarea id="beskrivelse"></textarea></label>
+    </div>
+    <div class="knapper">
+      <button id="koer" disabled>Generér rapport</button>
+      <button id="eksempel" class="sekundaer">Prøv med eksempelmodel</button>
+      <a id="hent" class="knap" hidden>Hent rapport (.docx)</a>
+    </div>
+    <div id="status">Starter Python i browseren …</div>
+  </section>
+
+  <section class="kort" id="resultat" hidden>
+    <strong>Figurer i rapporten</strong>
+    <div class="figurer" id="figurer"></div>
+  </section>
+
+  <p class="noter">En .struxml indeholder modellen, ikke beregningsresultater. Udnyttelser og udbøjninger
+    kræver kørsel med FEM-Design – se <a href="https://github.com/simonhansen8/femdoc">README</a>.</p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.29.5/full/pyodide.js"></script>
+<script type="module">
+import { installerFemdoc, genererRapport } from "./femdoc-loader.js";
+
+const $ = (id) => document.getElementById(id);
+const status = (t, fejl = false) => { $("status").textContent = t; $("status").className = fejl ? "fejl" : ""; };
+let pyodide = null, valgt = null, url = null;
+
+function opdaterKnap() { $("koer").disabled = !(pyodide && valgt); }
+
+function vaelg(navn, bytes) {
+  valgt = { navn, bytes };
+  $("filtekst").innerHTML = `Valgt: <strong></strong> (${(bytes.length / 1024).toFixed(0)} kB)`;
+  $("filtekst").querySelector("strong").textContent = navn;
+  if (!$("navn").value) $("navn").value = navn.replace(/\.(struxml|xml)$/i, "");
+  opdaterKnap();
+}
+
+async function laesFil(f) { vaelg(f.name, new Uint8Array(await f.arrayBuffer())); }
+
+$("drop").onclick = () => $("fil").click();
+$("drop").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") $("fil").click(); };
+$("fil").onchange = (e) => e.target.files[0] && laesFil(e.target.files[0]);
+$("drop").ondragover = (e) => { e.preventDefault(); $("drop").classList.add("over"); };
+$("drop").ondragleave = () => $("drop").classList.remove("over");
+$("drop").ondrop = (e) => { e.preventDefault(); $("drop").classList.remove("over");
+  if (e.dataTransfer.files[0]) laesFil(e.dataTransfer.files[0]); };
+
+$("eksempel").onclick = async () => {
+  const r = await fetch("eksempler/sample_slab.struxml");
+  vaelg("sample_slab.struxml", new Uint8Array(await r.arrayBuffer()));
+};
+
+$("koer").onclick = async () => {
+  $("koer").disabled = true; status("Genererer rapport …");
+  await new Promise((r) => setTimeout(r, 30));
+  try {
+    const felter = Object.fromEntries(["navn", "nummer", "projekterende", "kontrol", "beskrivelse"]
+      .map((k) => [k, $(k).value.trim()]));
+    const res = await genererRapport(pyodide, valgt.bytes, felter);
+    if (url) URL.revokeObjectURL(url);
+    url = URL.createObjectURL(new Blob([res.docx],
+      { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }));
+    Object.assign($("hent"), { href: url, download: res.docxNavn, hidden: false });
+    $("figurer").replaceChildren(...res.figurer.map((f) => {
+      const fig = document.createElement("figure"); fig.style.margin = 0;
+      const img = new Image(); img.alt = f.navn;
+      img.src = URL.createObjectURL(new Blob([f.data], { type: "image/png" }));
+      const cap = document.createElement("figcaption"); cap.textContent = f.navn;
+      fig.append(img, cap); return fig;
+    }));
+    $("resultat").hidden = false;
+    status(`Færdig: ${res.docxNavn}`);
+  } catch (e) {
+    status("Fejl under generering:\n" + (e.message || e), true);
+  } finally { opdaterKnap(); }
+};
+
+try {
+  pyodide = await loadPyodide();
+  await installerFemdoc(pyodide, async (sti) => (await fetch(sti)).text(), status);
+  status("Klar. Vælg en .struxml-fil.");
+  opdaterKnap();
+} catch (e) {
+  status("Kunne ikke starte Python i browseren:\n" + (e.message || e), true);
+}
+</script>
+</body>
+</html>
