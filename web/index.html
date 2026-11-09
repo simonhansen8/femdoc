@@ -323,7 +323,7 @@ $("plan").addEventListener("pointerdown", (e) => {
   const { p } = fang(modelPunkt(e), start);
   if (!start) { start = p; $("tip").textContent = "Klik slutpunktet. Snittet ses i pilenes retning."; forhaand(e); return; }
   if (Math.hypot(p[0] - start[0], p[1] - start[1]) < 0.1) return;
-  snit.push({ type: "snit", navn: naesteNavn(), fra: start, til: p, dybde: 1.0 });
+  snit.push({ type: "snit", navn: naesteNavn(), fra: start, til: p, dybde: null });
   saetTegner(false); tegnPlan(); visSnitListe();
 });
 
@@ -333,12 +333,12 @@ function visSnitListe() {
   liste.replaceChildren(...snit.map((s, i) => {
     const r = document.createElement("div"); r.className = "snit-raekke";
     r.innerHTML = `<label>Navn<input value=""></label>
-      <label title="Elementer inden for ± halvdelen af dybden tegnes i opstalt">Dybde [m]<input type="number" min="0.05" step="0.25"></label>
+      <label title="Hvor langt bagved snitplanen elementer vises. Tomt = alt bagved">Dybde [m]<input type="number" min="0.1" step="0.5" placeholder="alt"></label>
       <button class="sekundaer" title="Slet snit" aria-label="Slet snit">✕</button>`;
     const [navn, dybde] = r.querySelectorAll("input");
-    navn.value = s.navn; dybde.value = s.dybde;
+    navn.value = s.navn; dybde.value = s.dybde ?? "";
     navn.oninput = () => { s.navn = navn.value.trim() || "?"; tegnPlan(); };
-    dybde.oninput = () => { const v = parseFloat(dybde.value); if (v > 0) s.dybde = v; };
+    dybde.oninput = () => { const v = parseFloat(dybde.value); s.dybde = v > 0 ? v : null; };
     r.querySelector("button").onclick = () => { snit.splice(i, 1); tegnPlan(); visSnitListe(); };
     return r;
   }));

@@ -6,10 +6,13 @@ eller fra projekt.yaml:
     {"type": "3d",       "navn": "Isometri",       "azim": -60, "elev": 25}
     {"type": "oversigt", "navn": "Plan med snit"}
     {"type": "plan",     "navn": "Plan kote 3,50", "z": 3.5}
-    {"type": "snit",     "navn": "A-A", "fra": [0, 5], "til": [18, 5], "dybde": 1.0}
+    {"type": "snit",     "navn": "A-A", "fra": [0, 5], "til": [18, 5]}            # alt bagved
+    {"type": "snit",     "navn": "B-B", "fra": [9, -1], "til": [9, 11], "dybde": 6.0}
 
-Et snit er en lodret plan gennem linjen fra→til (set ovenfra). Elementer inden for
-±dybde/2 af linjen tegnes i opstalt; elementer der krydser snitplanen vises som snitflader.
+Et snit er en lodret plan gennem linjen fra→til (set ovenfra) og ses mod venstre for
+tegneretningen (pilene i planen). Elementer, som planen skærer, tegnes kraftigt (snitflader), og
+alt bagved tegnes lysere i opstalt (søjler, bjælker, vægge, dæk, understøtninger). "dybde" er
+hvor langt bagved snitplanen der vises; udelades den, vises alt bagved.
 """
 from __future__ import annotations
 from pathlib import Path
@@ -64,21 +67,30 @@ def plan_data(m: Model) -> dict:
 # ---------------------------------------------------------------- snit
 
 class _Snit:
+    """Koordinater i snitplanen: s langs snitlinjen, d vinkelret på. d > 0 er synssiden
+    (til venstre for tegneretningen, den side pilene i planen peger mod)."""
+
     def __init__(self, fra, til, dybde):
         self.ax, self.ay = fra
         dx, dy = til[0] - fra[0], til[1] - fra[1]
         self.L = (dx * dx + dy * dy) ** 0.5 or 1.0
         self.ux, self.uy = dx / self.L, dy / self.L
-        self.t = max(dybde, 0.01) / 2
+        self.dybde = None if dybde in (None, 0) else float(dybde)  # None = alt bagved
 
-    def s(self, p):  # afstand langs snittet
+    def s(self, p):
         return (p[0] - self.ax) * self.ux + (p[1] - self.ay) * self.uy
 
-    def d(self, p):  # afstand vinkelret på snittet
+    def d(self, p):
         return -(p[0] - self.ax) * self.uy + (p[1] - self.ay) * self.ux
 
     def inden_for(self, s):
         return -TOL <= s <= self.L + TOL
+
+    def synlig(self, d):  # bagved og inden for synsdybden
+        return d >= -PLAN_TOL and (self.dybde is None or d <= self.dybde + PLAN_TOL)
+
+
+PLAN_TOL = 0.05  # elementer så tæt på snitplanen regnes for at ligge i den
 
 
 def _krydsning(p, q, dp, dq):
@@ -86,83 +98,144 @@ def _krydsning(p, q, dp, dq):
     return tuple(a + k * (b - a) for a, b in zip(p, q))
 
 
-def snit(m: Model, view: dict, ud: Path) -> Path:
-    sn = _Snit(view["fra"], view["til"], float(view.get("dybde", 1.0)))
-    fig, ax = plt.subplots(figsize=(8, 4.8), dpi=160)
-    zs = []
+def _klip_poly(pts, sn):
+    """Del af en polygon på synssiden (d >= 0), klippet i snitplanen (Sutherland-Hodgman)."""
+    ud = []
+    for i, p in enumerate(pts):
+        q = pts[(i + 1) % len(pts)]
+        dp, dq = sn.d(p), sn.d(q)
+        if dp >= 0:
+            ud.append(p)
+        if (dp >= 0) != (dq >= 0):
+            ud.append(_krydsning(p, q, dp, dq))
+    return ud
 
-    # Flader: i planen -> opstalt, krydser planen -> snitlinje
+
+BAGVED = 0.42  # gennemsigtighed for elementer bagved snitplanen
+
+
+def snit(m: Model, view: dict, ud: Path) -> Path:
+    sn = _Snit(view["fra"], view["til"], view.get("dybde"))
+    fig, ax = plt.subplots(figsize=(8, 4.8), dpi=160)
+    zs: list[float] = []
+    navne_sat: set = set()
+
+    def label(x, z, tekst, **kw):
+        if (round(x, 1), round(z, 1)) not in navne_sat:
+            navne_sat.add((round(x, 1), round(z, 1)))
+            ax.text(x, z, tekst, **kw)
+
+    # ---- flader
     for f in m.flader:
         if len(f.kontur) < 3:
             continue
-        ds = [sn.d(p) for p in f.kontur]
         farve = plots.FARVER.get(f.type, "#ccc")
-        if all(abs(d) <= sn.t for d in ds):
-            poly = [(sn.s(p), p[2]) for p in f.kontur]
-            ax.add_patch(Polygon(poly, closed=True, fc=farve, ec="#555", alpha=0.35, lw=0.8))
-            zs += [p[1] for p in poly]
-            cx = sum(p[0] for p in poly) / len(poly); cz = sum(p[1] for p in poly) / len(poly)
-            ax.text(cx, cz, f.navn, fontsize=7, ha="center", va="center", color="#333")
-            continue
-        snitpkt = []
-        for p, q, dp, dq in zip(f.kontur, f.kontur[1:], ds, ds[1:]):
-            if abs(dp) < 1e-9:
-                snitpkt.append(p)
-            elif dp * dq < 0:
-                snitpkt.append(_krydsning(p, q, dp, dq))
-        if len(snitpkt) >= 2:
-            proj = sorted((sn.s(p), p[2]) for p in snitpkt)
-            (s0, z0), (s1, z1) = proj[0], max(proj, key=lambda p: (p[0], p[1]))
-            if abs(s1 - s0) < TOL:  # lodret snitflade (væg)
-                z0, z1 = min(p[1] for p in proj), max(p[1] for p in proj)
-            s0, s1 = max(s0, 0), min(s1, sn.L)
-            if s1 >= s0 and (s1 - s0 > TOL or abs(z1 - z0) > TOL):
-                ax.plot([s0, s1], [z0, z1], color="#555",
-                        lw=4.5 if f.type != "wall" else 6, solid_capstyle="butt", zorder=3)
-                tyk = f" ({round(f.tykkelse * 1000)} mm)" if f.tykkelse else ""
-                ax.text((s0 + s1) / 2, max(z0, z1) + 0.25, f.navn + tyk, fontsize=7, ha="center", color="#333")
-                zs += [z0, z1]
+        ds = [sn.d(p) for p in f.kontur]
+        zmin_f, zmax_f = min(p[2] for p in f.kontur), max(p[2] for p in f.kontur)
+        vandret = zmax_f - zmin_f < TOL
+        tyk = f" ({round(f.tykkelse * 1000)} mm)" if f.tykkelse else ""
 
-    # Stænger
+        # skåret af snitplanen -> snitflade
+        if min(ds) < -PLAN_TOL and max(ds) > PLAN_TOL:
+            pkt = []
+            for p, q, dp, dq in zip(f.kontur, f.kontur[1:] + f.kontur[:1], ds, ds[1:] + ds[:1]):
+                if dp * dq < 0:
+                    pkt.append(_krydsning(p, q, dp, dq))
+                elif abs(dp) < 1e-9:
+                    pkt.append(p)
+            if len(pkt) >= 2:
+                proj = sorted((sn.s(p), p[2]) for p in pkt)
+                s0, s1 = max(proj[0][0], 0), min(proj[-1][0], sn.L)
+                if vandret and s1 > s0:
+                    z = proj[0][1]
+                    ax.plot([s0, s1], [z, z], color="#333", lw=5, solid_capstyle="butt", zorder=4)
+                    label(s0 + 0.15, z + 0.35, f.navn + tyk, fontsize=7, ha="left", color="#222")
+                    zs.append(z)
+                elif not vandret:  # væg skåret på tværs: lodret snitflade
+                    for s_, _z in proj[:1]:
+                        if sn.inden_for(s_):
+                            t = (f.tykkelse or 0.2)
+                            ax.add_patch(Polygon([(s_ - t / 2, zmin_f), (s_ + t / 2, zmin_f),
+                                                  (s_ + t / 2, zmax_f), (s_ - t / 2, zmax_f)],
+                                                 closed=True, fc="#555", ec="#222", lw=0.8, zorder=4))
+                            label(s_, zmax_f + 0.1, f.navn + tyk, fontsize=7, ha="center", color="#222")
+                            zs += [zmin_f, zmax_f]
+            # ... og delen bagved vises lysere
+            bag = _klip_poly(f.kontur, sn)
+        else:
+            bag = f.kontur if all(sn.synlig(d) for d in ds) or (min(ds) >= -PLAN_TOL and sn.dybde is None) else []
+            if sn.dybde is not None and min(ds) >= -PLAN_TOL and max(ds) > sn.dybde + PLAN_TOL:
+                bag = [p for p in _klip_poly(f.kontur, sn)]
+        if len(bag) >= 2:
+            if vandret:
+                ss = [sn.s(p) for p in bag]
+                s0, s1 = max(min(ss), 0), min(max(ss), sn.L)
+                if s1 > s0:
+                    z = bag[0][2]
+                    ax.plot([s0, s1], [z, z], color=farve, lw=4, alpha=0.7, solid_capstyle="butt", zorder=1)
+                    zs.append(z)
+            else:  # væg set i opstalt
+                poly = [(sn.s(p), p[2]) for p in bag]
+                ax.add_patch(Polygon(poly, closed=True, fc=farve, ec="#777", alpha=BAGVED + 0.1, lw=0.8, zorder=1))
+                zs += [p[1] for p in poly]
+                label(sum(p[0] for p in poly) / len(poly), sum(p[1] for p in poly) / len(poly),
+                      f.navn, fontsize=7, ha="center", va="center", color="#555")
+
+    # ---- stænger
     for st in m.stænger:
         if len(st.punkter) < 2:
             continue
         p, q = st.punkter[0], st.punkter[-1]
         dp, dq = sn.d(p), sn.d(q)
         farve = plots.FARVER.get(st.type, "#333")
-        if abs(dp) <= sn.t and abs(dq) <= sn.t:
-            s0, s1 = sn.s(p), sn.s(q)
-            if not (sn.inden_for(s0) or sn.inden_for(s1)):
-                continue
-            ax.plot([s0, s1], [p[2], q[2]], color=farve, lw=2.4, zorder=4)
-            ax.text((s0 + s1) / 2, (p[2] + q[2]) / 2, " " + st.navn, fontsize=6.5, color="#222",
-                    rotation=90 if abs(s0 - s1) < TOL else 0, va="bottom", ha="left")
-            zs += [p[2], q[2]]
-        elif dp * dq < 0:
-            c = _krydsning(p, q, dp, dq)
-            sc = sn.s(c)
+        if dp * dq < 0 and abs(dp) > PLAN_TOL and abs(dq) > PLAN_TOL:       # skæres af planen
+            c = _krydsning(p, q, dp, dq); sc = sn.s(c)
             if sn.inden_for(sc):
-                ax.plot(sc, c[2], marker="s", ms=6, mfc="white", mec=farve, mew=1.8, zorder=5)
-                ax.text(sc, c[2] - 0.12, st.navn, fontsize=6, ha="center", va="top", color="#222")
+                ax.plot(sc, c[2], marker="s", ms=7, mfc=farve, mec="#222", mew=1.2, zorder=6)
+                label(sc, c[2] - 0.18, st.navn, fontsize=6.5, ha="center", va="top", color="#222")
                 zs.append(c[2])
+            continue
+        if min(dp, dq) < -PLAN_TOL:      # (helt eller delvist) foran snitplanen -> ses ikke
+            continue
+        if not (sn.synlig(dp) or sn.synlig(dq)):
+            continue
+        s0, s1 = sn.s(p), sn.s(q)
+        if not (sn.inden_for(s0) or sn.inden_for(s1)):
+            continue
+        i_planen = abs(dp) <= PLAN_TOL and abs(dq) <= PLAN_TOL
+        if abs(s0 - s1) < TOL and abs(p[2] - q[2]) < TOL:   # bjælke set i endevisning
+            ax.plot(s0, p[2], marker="s", ms=6, mfc="white", mec=farve, mew=1.4, alpha=0.8, zorder=2)
+            continue
+        ax.plot([s0, s1], [p[2], q[2]], color=farve, lw=2.8 if i_planen else 2.2,
+                alpha=1.0 if i_planen else 0.75, zorder=5 if i_planen else 3)
+        lodret = abs(s0 - s1) < TOL
+        label((s0 + s1) / 2, (p[2] + q[2]) / 2 if lodret else p[2] + 0.08, " " + st.navn, fontsize=6.5,
+              color="#222" if i_planen else "#555", va="bottom", ha="left" if lodret else "center",
+              rotation=90 if lodret else 0)
+        zs += [p[2], q[2]]
 
-    # Understøtninger
+    # ---- understøtninger
     for u in m.understoetninger:
         for p in (u.geometri if u.type == "punkt" else u.geometri[:1]):
-            if abs(sn.d(p)) <= sn.t and sn.inden_for(sn.s(p)):
-                ax.plot(sn.s(p), p[2], "^", color="#2e7d32", ms=9, zorder=6)
+            if sn.synlig(sn.d(p)) and sn.inden_for(sn.s(p)):
+                ax.plot(sn.s(p), p[2], "^", color="#2e7d32", ms=9, alpha=1 if abs(sn.d(p)) <= PLAN_TOL else 0.65, zorder=6)
                 zs.append(p[2])
 
     zmin, zmax = (min(zs), max(zs)) if zs else (0, 1)
     ax.set_xlim(-0.05 * sn.L, 1.05 * sn.L)
-    ax.set_ylim(zmin - 0.6, zmax + 0.6)
+    ax.set_ylim(zmin - 0.6, zmax + 0.8)
     ax.set_aspect("equal", adjustable="box")
     ax.grid(alpha=0.3)
+    bagved = "alt bagved" if sn.dybde is None else f"{sn.dybde:g} m bagved"
     ax.set_xlabel(f"Afstand langs snit [m]  (fra ({view['fra'][0]:g}; {view['fra'][1]:g}) "
-                  f"til ({view['til'][0]:g}; {view['til'][1]:g}), dybde ±{sn.t:g} m)", fontsize=8)
+                  f"til ({view['til'][0]:g}; {view['til'][1]:g}), set i pilenes retning, {bagved})", fontsize=8)
     ax.set_ylabel("Kote z [m]")
     ax.set_title(f"Snit {view.get('navn', '')}", fontsize=10)
-    fig.tight_layout(); fig.savefig(ud); plt.close(fig)
+    from matplotlib.lines import Line2D
+    fig.legend(handles=[Line2D([], [], color="#333", lw=5, label="skåret af snitplanen"),
+                        Line2D([], [], color="#888", lw=2.2, alpha=0.75, label="bagved snitplanen")],
+               fontsize=7, loc="lower center", ncol=2, frameon=False)
+    fig.tight_layout(rect=(0, 0.05, 1, 1)); fig.savefig(ud); plt.close(fig)
     return ud
 
 

@@ -10,7 +10,9 @@ Siden udrulles automatisk fra `main` af `.github/workflows/pages.yml`.
 ### Selvvalgte visninger
 Når modellen er indlæst, vises en plan af den. Klik **Tegn snit** og derefter start- og slutpunkt.
 Punkterne fanger knuder og modullinjer, og næsten vandrette eller lodrette linjer rettes ind.
-Snittet tegnes som opstalt med elementer inden for ± dybde/2. Elementer der krydser snittet vises som snitflader.
+Snittet ses mod venstre for tegneretningen (pilene). Det, planen skærer, tegnes kraftigt som snitflader,
+og alt bagved tegnes i opstalt (søjler i fuld højde, bjælker, vægge, dæk og understøtninger). Feltet
+*Dybde* begrænser, hvor langt bagved der vises; tomt betyder alt bagved.
 Man vælger også, hvilke etageplaner (én pr. kote med bjælker eller dæk) og 3D-visninger der skal med.
 De samme visninger kan angives under `rapport.views` i `projekt.yaml` (se `eksempel/projekt.yaml`).
 

@@ -20,8 +20,8 @@ rapport:
     - {type: 3d, navn: "Isometri", azim: -60, elev: 25}
     - {type: oversigt, navn: "Plan med snit"}
     - {type: plan, z: 3.5}
-    - {type: snit, navn: "A-A", fra: [-1, 5], til: [19, 5], dybde: 1.0}
-    - {type: snit, navn: "B-B", fra: [9, -1], til: [9, 11], dybde: 1.0}
+    - {type: snit, navn: "A-A", fra: [-1, 5], til: [19, 5]}
+    - {type: snit, navn: "B-B", fra: [9, -1], til: [9, 11]}
   word_skabelon: null               # fx "skabeloner/firma.dotx"
   sektioner:
     - titel: "Udnyttelse af stålbjælker"
