@@ -53,6 +53,17 @@ python -m femdoc eksempel/projekt.yaml --toer   # uden FEM-Design: bruger eksist
 Engangsopsætning: lav en `.dsc` dokumentationsskabelon med de faste resultatviews og
 `.bsc` listeskabeloner for de tabeller der skal eftervises, og læg dem under `skabeloner/`.
 
+## Undersøg hvad din FEM-Design kan automatisere
+`tools/fd_probe.py` er et lille testprogram (kun Pythons standardbibliotek), som du selv kører på en computer med
+FEM-Design. Det læser FEM-Designs `fdscript.xsd` (kun læsning), lister alle scriptkommandoer og kører en testmodel
+gennem FEM-Design, så vi kan se, hvilke views og snit FEM-Design selv kan eksportere.
+
+```bash
+python tools/fd_probe.py            # finder FEM-Design selv; eller: --fd "C:\...\fd3dstruct.exe"
+python tools/fd_probe.py --kun-xsd  # kun læsning af fdscript.xsd, kører ikke FEM-Design
+```
+Resultatet er `femdoc-test/rapport.md` og en zip, som kan sendes tilbage.
+
 ## Struktur
 | Fil | Indhold |
 |---|---|
