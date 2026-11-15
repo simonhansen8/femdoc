@@ -156,9 +156,60 @@ def _stivhed(group) -> str:
     return "fast: " + ", ".join(ud) if ud else "fjedrende/fri"
 
 
+_MATERIALTYPER = {"steel": "Stål", "concrete": "Beton", "timber": "Træ",
+                  "reinforcing_steel": "Armering", "custom": "Brugerdefineret"}
+# (E-modul, styrke) – E i MPa. E_0 er 0 i FEM-Designs biblioteksmaterialer, så der
+# bruges de karakteristiske værdier, når E_0 mangler.
+_MATERIALFELTER = {"steel": (("E_0", "Ek"), "Fyk16"), "concrete": (("E_0", "Ecm"), "Fck"),
+                   "timber": (("E_0", "E0mean"), "Fmk0"), "reinforcing_steel": (("Es",), "fyk")}
+LANDE = {"common": "intet (EN-standard)", "DK": "Danmark", "S": "Sverige", "N": "Norge",
+         "FIN": "Finland", "EST": "Estland", "LT": "Litauen", "PL": "Polen", "GB": "Storbritannien",
+         "H": "Ungarn", "RO": "Rumænien", "D": "Tyskland", "DE": "Tyskland", "NL": "Holland",
+         "B": "Belgien", "TR": "Tyrkiet"}
+
+
+def _tal(e, navn) -> float | None:
+    try:
+        v = float(e.get(navn))
+    except (TypeError, ValueError):
+        return None
+    return v or None
+
+
+def _materiale(navn: str, data) -> dict:
+    t = _tag(data) if data is not None else "?"
+    e_felter, styrke = _MATERIALFELTER.get(t, (("E_0",), ""))
+    E = None
+    for f in e_felter:
+        E = _tal(data, f) if data is not None else None
+        if E:
+            # E_0 står i kN/m², de karakteristiske værdier i MPa (= N/mm²)
+            E = E / 1e6 if f == "E_0" else E / 1e3
+            break
+    return {
+        "Navn": navn,
+        "Type": _MATERIALTYPER.get(t, t),
+        "E [GPa]": E,
+        "Styrke [MPa]": _tal(data, styrke) if data is not None and styrke else None,
+        "Densitet [t/m³]": _tal(data, "mass") if data is not None else None,
+    }
+
+
+class StruxmlFejl(ValueError):
+    """Filen kan ikke læses som en FEM-Design .struxml."""
+
+
 def laes(sti: str | Path) -> Model:
     sti = Path(sti)
-    rod = ET.parse(sti).getroot()
+    if not sti.is_file():
+        raise StruxmlFejl(f"Filen findes ikke: {sti}")
+    try:
+        rod = ET.parse(sti).getroot()
+    except ET.ParseError as e:
+        raise StruxmlFejl(f"{sti.name} er ikke gyldig XML ({e}). Er det en .struxml fra FEM-Design?") from None
+    if _tag(rod) != "database":
+        raise StruxmlFejl(f"{sti.name} ligner ikke en FEM-Design .struxml "
+                          f"(rodelementet er <{_tag(rod)}>, forventede <database>).")
     m = Model(fil=sti, software=rod.get("source_software", "?"),
               standard=rod.get("standard", "?"), land=rod.get("country", "?"))
 
@@ -168,12 +219,7 @@ def laes(sti: str | Path) -> Model:
             for mat in _kids(blok, "material"):
                 m.materialer[mat.get("guid")] = mat.get("name", "?")
                 data = next(iter(mat), None)
-                m.materiale_data.append({
-                    "Navn": mat.get("name", "?"),
-                    "Type": _tag(data) if data is not None else "?",
-                    "E [GPa]": (float(data.get("E_0", 0)) / 1e6) if data is not None and data.get("E_0") else None,
-                    "Densitet [t/m³]": float(data.get("mass")) if data is not None and data.get("mass") else None,
-                })
+                m.materiale_data.append(_materiale(mat.get("name", "?"), data))
     sektioner: dict[str, str] = {}
     komplekse: dict[str, str] = {}
     for blok in _kids(rod, "sections"):

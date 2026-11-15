@@ -285,6 +285,31 @@ def etageplan(m: Model, view: dict, ud: Path) -> Path:
 
 # ---------------------------------------------------------------- samlet
 
+_KRAEV = {"3d": (), "oversigt": (), "plan": ("z",), "snit": ("fra", "til")}
+
+
+def _xy(v) -> bool:
+    return isinstance(v, (list, tuple)) and len(v) == 2 and all(isinstance(t, (int, float)) for t in v)
+
+
+def valider(views: list[dict] | None) -> None:
+    """Rejser ValueError med en forståelig besked, hvis et view er forkert angivet."""
+    if views is None:
+        return
+    if not isinstance(views, list):
+        raise ValueError("views skal være en liste, fx  - {type: 3d, azim: -60, elev: 25}")
+    for i, v in enumerate(views, 1):
+        if not isinstance(v, dict) or v.get("type") not in _KRAEV:
+            raise ValueError(f"view nr. {i} skal have type: {', '.join(_KRAEV)} (fik {v!r})")
+        for k in _KRAEV[v["type"]]:
+            if k not in v:
+                raise ValueError(f"view nr. {i} ({v['type']}) mangler '{k}'")
+        if v["type"] == "snit":
+            if not (_xy(v["fra"]) and _xy(v["til"])):
+                raise ValueError(f"view nr. {i} (snit): 'fra' og 'til' skal være [x, y] i meter")
+            if v["fra"] == v["til"] or list(v["fra"]) == list(v["til"]):
+                raise ValueError(f"view nr. {i} (snit): 'fra' og 'til' er samme punkt")
+
 def _filnavn(i: int, v: dict) -> str:
     sikker = "".join(c if c.isalnum() else "_" for c in str(v.get("navn", v["type"])))[:30]
     return f"view_{i:02d}_{sikker}.png"
@@ -292,6 +317,7 @@ def _filnavn(i: int, v: dict) -> str:
 
 def tegn(m: Model, views: list[dict], mappe: Path) -> list[tuple[Path, str]]:
     """Tegner alle views og returnerer (fil, figurtekst)."""
+    valider(views)
     mappe.mkdir(parents=True, exist_ok=True)
     snit_liste = [v for v in views if v.get("type") == "snit"]
     ud = []

@@ -4,10 +4,15 @@ from datetime import date
 from pathlib import Path
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor, Cm
 
 from .config import Projekt
 from .fem import csv_sti, fd_docx_sti
+from .tal import tal
+
+ROED = RGBColor(0xC0, 0, 0)
 
 MAX_RAEKKER = 25  # resten ligger i bilag/CSV
 
@@ -21,7 +26,7 @@ def _forside(doc: Document, p: Projekt):
     tbl.style = "Table Grid"
     for k, v in [("Projektnr.", p.nummer), ("Model", p.model.name),
                  ("Projekterende", p.projekterende), ("Kontrol", p.kontrol),
-                 ("Dato", date.today().isoformat())]:
+                 ("Dato", date.today().strftime("%d.%m.%Y"))]:
         r = tbl.add_row().cells; r[0].text = k; r[1].text = str(v)
     if p.beskrivelse:
         doc.add_paragraph(); doc.add_paragraph(p.beskrivelse)
@@ -40,7 +45,7 @@ def _df_tabel(doc: Document, df, kolonne: str | None):
     for _, r in vis.iterrows():
         c = t.add_row().cells
         for i, v in enumerate(r):
-            c[i].text = f"{v:.3g}" if isinstance(v, float) else str(v)
+            c[i].text = tal(v) if isinstance(v, float) else str(v)
     for row in t.rows:
         for c in row.cells:
             for par in c.paragraphs:
@@ -57,7 +62,7 @@ def _sektion(doc: Document, p: Projekt, s, oversigt: list):
         doc.add_paragraph(s.tekst)
     f = csv_sti(p, s.bsc)
     if not f.exists():
-        doc.add_paragraph(f"MANGLER: {f.name} blev ikke genereret.").runs[0].font.color.rgb = RGBColor(0xC0, 0, 0)
+        _advar(doc, f"MANGLER: {f.name} blev ikke genereret.")
         oversigt.append((s.titel, "–", "MANGLER")); return
     from .tabeller import laes_liste  # pandas indlæses kun når der er resultattabeller
     titel, df = laes_liste(f)
@@ -66,18 +71,50 @@ def _sektion(doc: Document, p: Projekt, s, oversigt: list):
     status = "–"
     if s.kolonne and s.kolonne in df.columns:
         mx = df[s.kolonne].abs().max()
-        linje = f"Største |{s.kolonne}| = {mx:.3g}"
+        linje = f"Største |{s.kolonne}| = {tal(mx)}"
         if s.graense is not None:
             ok = mx <= s.graense
             status = "OK" if ok else "IKKE OK"
-            linje += f"  (grænse {s.graense:g}) → {status}"
+            linje += f"  (grænse {tal(s.graense)}) → {status}"
         par = doc.add_paragraph(); run = par.add_run(linje); run.bold = True
         if status == "IKKE OK":
-            run.font.color.rgb = RGBColor(0xC0, 0, 0)
-        oversigt.append((s.titel, f"{mx:.3g}", status))
+            run.font.color.rgb = ROED
+        oversigt.append((s.titel, tal(mx), status))
     else:
-        oversigt.append((s.titel, "–", "–"))
+        if s.kolonne:  # stavefejl i projekt.yaml skal ikke give et stille "–"
+            _advar(doc, f"Kolonnen '{s.kolonne}' findes ikke i {f.name}. "
+                        f"Tilgængelige kolonner: {', '.join(map(str, df.columns))}")
+            print(f"Advarsel: kolonnen '{s.kolonne}' findes ikke i {f.name}")
+        oversigt.append((s.titel, "–", "KOLONNE MANGLER" if s.kolonne else "–"))
     _df_tabel(doc, df, s.kolonne)
+
+
+def _advar(doc: Document, tekst: str):
+    doc.add_paragraph().add_run(tekst).font.color.rgb = ROED
+
+
+def _felt(run, kode: str):
+    """Indsætter et Word-felt (fx PAGE), som Word selv udfylder."""
+    for typ, tekst in (("begin", None), (None, kode), ("separate", None), (None, "1"), ("end", None)):
+        if typ:
+            e = OxmlElement("w:fldChar"); e.set(qn("w:fldCharType"), typ)
+        elif tekst == kode:
+            e = OxmlElement("w:instrText"); e.set(qn("xml:space"), "preserve"); e.text = f" {kode} "
+        else:
+            e = OxmlElement("w:t"); e.text = tekst
+        run._r.append(e)
+
+
+def _sidefod(doc: Document, p: Projekt):
+    """Projektnavn/-nummer og 'Side x af y' i sidefoden (kun uden firmaskabelon)."""
+    for sek in doc.sections:
+        par = sek.footer.paragraphs[0]
+        par.text = " – ".join(x for x in (p.nummer, p.navn) if x) + "\t\tSide "
+        _felt(par.add_run(), "PAGE")
+        par.add_run(" af ")
+        _felt(par.add_run(), "NUMPAGES")
+        for r in par.runs:
+            r.font.size = Pt(8)
 
 
 def _indsaet_docx(doc: Document, kilde: Path):
@@ -98,6 +135,7 @@ def byg(p: Projekt) -> Path:
     if not p.word_skabelon:
         for s in doc.sections:
             s.left_margin = s.right_margin = Cm(2)
+        _sidefod(doc, p)
     _forside(doc, p)
 
     oversigt: list = []
@@ -106,10 +144,14 @@ def byg(p: Projekt) -> Path:
         sammendrag_par = doc.add_paragraph()
 
     # Inputdel direkte fra .struxml (kræver ikke FEM-Design)
-    if p.model and p.model.suffix.lower() == ".struxml" and p.model.exists():
-        from .struxml import laes
-        from .modelrapport import tilfoej
-        tilfoej(doc, laes(p.model), p.output / "figurer", p.views)
+    if p.model and p.model.suffix.lower() == ".struxml":
+        if p.model.exists():
+            from .struxml import laes
+            from .modelrapport import tilfoej
+            tilfoej(doc, laes(p.model), p.output / "figurer", p.views)
+        else:
+            print(f"Advarsel: modelfilen findes ikke: {p.model}")
+            _advar(doc, f"Modelfilen {p.model.name} blev ikke fundet – modelbeskrivelse og laster mangler.")
 
     if p.sektioner:
         doc.add_heading("Resultater", level=1)
@@ -133,6 +175,7 @@ def byg(p: Projekt) -> Path:
         doc.add_heading("Bilag A – Modelvisninger og resultatplots (FEM-Design)", level=1)
         doc = _indsaet_docx(doc, fd)
 
-    ud = p.output / f"{p.nummer or 'rapport'}_statisk_dokumentation.docx"
+    stamme = "".join(c if c.isalnum() or c in "-_." else "_" for c in (p.nummer or p.model.stem or "rapport"))
+    ud = p.output / f"{stamme}_statisk_dokumentation.docx"
     doc.save(str(ud))
     return ud
