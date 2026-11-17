@@ -5,6 +5,7 @@ Genererer en statisk dokumentation (Word) ud fra en FEM-Design model med få inp
 ## Webside
 **https://simonhansen8.github.io/femdoc/** – upload en .struxml og hent rapporten.
 Python-koden kører direkte i browseren (Pyodide), så modellen forlader ikke din computer.
+Felterne *Projekterende* og *Kontrol* huskes i browseren til næste gang.
 Siden udrulles automatisk fra `main` af `.github/workflows/pages.yml`.
 
 ### Selvvalgte visninger
@@ -21,20 +22,36 @@ Kræver **ikke** FEM-Design installeret.
 
 ```bash
 pip install -r requirements.txt
-python -m femdoc min_model.struxml --navn "Blok B" --nummer 24-117
+python -m femdoc min_model.struxml --navn "Blok B" --nummer 24-117 --projekterende SIH --kontrol ABC
+python -m femdoc --help        # alle muligheder
 ```
 
 Rapporten indeholder:
-* Modelbeskrivelse (software, norm, antal elementer)
+* Forside med projektdata og sidefod med projektnummer og "Side x af y"
+* Modelbeskrivelse (software, norm, nationalt anneks, antal elementer)
 * Modelvisninger tegnet automatisk: isometri fra to sider og plan
-* Tabeller over materialer, stangelementer (tværsnit, længde), plader/vægge (tykkelse), understøtninger
-* Lasttilfælde med en lastfigur pr. tilfælde og lastkombinationer med partialkoefficienter
+* Materialer (E-modul, karakteristisk styrke, densitet), stangelementer samlet pr. tværsnit og materiale
+  med samlet længde og en fuld liste, plader/vægge (tykkelse), understøtninger
+* Lasttilfælde med en lastoversigt (værdi, enhed, retning) og en lastfigur pr. tilfælde,
+  og lastkombinationer med partialkoefficienter
+
+Tal skrives med decimalkomma. Fejl i inputfilen (forkert filtype, ikke en .struxml, fejl i
+`projekt.yaml`) giver en kort fejlbesked i stedet for en Python-traceback.
 
 **Begrænsning:** en .struxml indeholder modellen, ikke beregningsresultater.
 Resultater (udnyttelse, udbøjning, reaktioner) kræver en kørsel i FEM-Design – se nedenfor.
 
 ## Fuld kørsel med resultater – projekt.yaml
-Ingeniøren udfylder `projekt.yaml` (se `eksempel/projekt.yaml`).
+Ingeniøren udfylder `projekt.yaml` (se `eksempel/projekt.yaml`). Man kan få en udfyldt start-fil
+med standardvisninger og én etageplan pr. kote ud fra modellen:
+
+```bash
+python -m femdoc min_model.struxml --lav-yaml    # skriver projekt.yaml ved siden af modellen
+```
+
+Fejl i `projekt.yaml` (manglende felter, stavefejl i en sektion, et snit uden `til`) meldes med
+præcis placering. Findes en `kolonne` ikke i CSV-filen, står det med rødt i rapporten sammen med de
+kolonner, der findes, og sammendraget viser `KOLONNE MANGLER`.
 
 ```
 projekt.yaml ──► femdoc ──► FEM-Design (StruSofts API, kun Windows)
@@ -72,6 +89,7 @@ Resultatet er `femdoc-test/rapport.md` og en zip, som kan sendes tilbage.
 | `femdoc/modelrapport.py` | Rapportafsnit for model og laster |
 | `femdoc/fem.py` | Styring af FEM-Design via API'et |
 | `femdoc/tabeller.py` | Læser FEM-Designs CSV-lister |
+| `femdoc/tal.py` | Talformat med decimalkomma |
 | `femdoc/rapport.py` | Samler Word-rapporten |
 | `femdoc/web.py`, `web/` | Websiden (Pyodide) |
 

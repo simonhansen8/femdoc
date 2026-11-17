@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 from .struxml import Model
+from .tal import tal
 
 FARVER = {"beam": "#1f4e79", "column": "#c55a11", "truss": "#548235",
           "plate": "#9dc3e6", "wall": "#f4b183", "panel": "#c9c9c9"}
@@ -125,7 +126,7 @@ def lastplan(m: Model, lasttilfaelde: str, ud: Path) -> Path:
     for l in m.laster_pr_tilfaelde().get(lasttilfaelde, []):
         if not l.geometri:
             continue
-        lab = f"{abs(l.vaerdi):g} {enhed[l.type]}"
+        lab = f"{tal(abs(l.vaerdi))} {enhed[l.type]}"
         if l.type == "flade" and len(l.geometri) >= 3:
             ax.add_collection3d(Poly3DCollection([l.geometri], facecolor=LASTFARVE, alpha=0.25, edgecolor=LASTFARVE))
         elif len(l.geometri) >= 2:

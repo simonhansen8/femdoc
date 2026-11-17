@@ -39,6 +39,9 @@
   button:disabled { opacity:.5; cursor:default; }
   #status { color:var(--svag); margin-top:12px; min-height:1.5em; }
   #status.fejl { color:var(--fejl); white-space:pre-wrap; font-family:ui-monospace, monospace; font-size:12px; }
+  #status.fejl-kort { color:var(--fejl); }
+  #status details { color:var(--svag); font-size:12px; margin-top:6px; }
+  #status pre { white-space:pre-wrap; overflow-x:auto; font-size:11px; }
   a { color:var(--accent); }
 
   .views { display:grid; grid-template-columns: minmax(0, 3fr) minmax(240px, 2fr); gap:20px; }
@@ -149,6 +152,23 @@ import { installerFemdoc, genererRapport, hentPlan } from "./femdoc-loader.js";
 const $ = (id) => document.getElementById(id);
 const SVG = "http://www.w3.org/2000/svg";
 const status = (t, fejl = false) => { $("status").textContent = t; $("status").className = fejl ? "fejl" : ""; };
+// Python-fejl kommer som en hel traceback; vis den sidste linje (selve beskeden) og resten foldet sammen.
+function visFejl(intro, e) {
+  const fuld = String(e && e.message || e).trim();
+  const linjer = fuld.split("\n").filter((l) => l.trim());
+  const kort = (linjer[linjer.length - 1] || fuld).replace(/^[\w.]*(Fejl|Error|Exception):\s*/, "");
+  const s = $("status"); s.className = "fejl-kort"; s.replaceChildren(intro + " " + kort);
+  if (linjer.length > 1) {
+    const d = document.createElement("details"), sm = document.createElement("summary"), pre = document.createElement("pre");
+    sm.textContent = "Tekniske detaljer"; pre.textContent = fuld; d.append(sm, pre); s.append(d);
+  }
+}
+// Projekterende og kontrol er typisk de samme fra gang til gang: husk dem i denne browser.
+const HUSK = ["projekterende", "kontrol"];
+for (const k of HUSK) {
+  try { $(k).value = localStorage.getItem("femdoc." + k) || ""; } catch {}
+  $(k).addEventListener("change", () => { try { localStorage.setItem("femdoc." + k, $(k).value.trim()); } catch {} });
+}
 let pyodide = null, valgt = null, url = null, plan = null;
 let snit = [], tegner = false, start = null;
 
@@ -183,7 +203,7 @@ const fmt = (v) => (Math.round(v * 100) / 100).toLocaleString("da-DK");
 
 function visPlan() {
   try { plan = hentPlan(pyodide, valgt.bytes); }
-  catch (e) { status("Kunne ikke læse modellen:\n" + (e.message || e), true); return; }
+  catch (e) { $("views-kort").hidden = true; visFejl("Kunne ikke læse modellen:", e); return; }
   $("views-kort").hidden = false;
   $("niveauer").replaceChildren(...plan.niveauer.map((z) => {
     const l = document.createElement("label"); l.className = "tjek";
@@ -378,7 +398,7 @@ $("koer").onclick = async () => {
     }));
     status(`Færdig: ${res.docxNavn}`);
   } catch (e) {
-    status("Fejl under generering:\n" + (e.message || e), true);
+    visFejl("Fejl under generering:", e);
   } finally { opdaterKnap(); }
 };
 
@@ -389,7 +409,7 @@ try {
   opdaterKnap();
   if (valgt) visPlan();
 } catch (e) {
-  status("Kunne ikke starte Python i browseren:\n" + (e.message || e), true);
+  visFejl("Kunne ikke starte Python i browseren:", e);
 }
 </script>
 </body>
