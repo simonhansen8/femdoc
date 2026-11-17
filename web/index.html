@@ -87,8 +87,9 @@
     <h2>1. Model og projekt</h2>
     <div class="drop" id="drop" tabindex="0" role="button">
       <div id="filtekst"><strong>Vælg .struxml</strong> eller træk filen herind</div>
+      <button type="button" class="lille" id="vaelg-fil" style="margin-top:12px">Vælg fil …</button>
     </div>
-    <input type="file" id="fil" accept=".struxml,.xml" hidden>
+    <input type="file" id="fil" hidden>
     <div class="felter">
       <label>Projektnavn<input id="navn" placeholder="fx Etageboliger, Blok B"></label>
       <label>Projektnummer<input id="nummer" placeholder="fx 24-117"></label>
@@ -187,6 +188,7 @@ function vaelg(navn, bytes) {
 async function laesFil(f) { vaelg(f.name, new Uint8Array(await f.arrayBuffer())); }
 
 $("drop").onclick = () => $("fil").click();
+$("vaelg-fil").onclick = (e) => { e.stopPropagation(); $("fil").click(); };
 $("drop").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") $("fil").click(); };
 $("fil").onchange = (e) => e.target.files[0] && laesFil(e.target.files[0]);
 $("drop").ondragover = (e) => { e.preventDefault(); $("drop").classList.add("over"); };
